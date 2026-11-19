@@ -1,6 +1,6 @@
 # Distributed Rate Limiter
 
-![Dashboard showing live allowed and denied traffic](docs/dashboard.png)
+![Dashboard showing live allowed and denied traffic](docs/Dashboard.png)
 
 A rate limiter for Express that keeps its counters in Redis, so any number of app instances share the same limits. I built it to understand what goes wrong when several servers count requests at the same time, and how to handle Redis going down. It has three algorithms, limits you can change while the server is running, a record of who got blocked, and a small React dashboard.
 
