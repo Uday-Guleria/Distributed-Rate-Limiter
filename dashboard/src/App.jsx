@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 const POLL_MS = 3000;
 const ROUTES = ['public', 'search', 'spike', 'login', 'account'];
 const WARN = 0.05; // amber above 5% denied
@@ -21,7 +22,7 @@ function useApi() {
 
   useEffect(() => {
     // In development the API can mint an admin token. In production this 404s and you paste one in.
-    fetch('/dev/token?sub=dashboard&role=admin')
+    fetch(`${API_BASE}/dev/token?sub=dashboard&role=admin`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setToken(d.token))
       .catch(() => setNeedsToken(true));
@@ -29,7 +30,7 @@ function useApi() {
 
   const call = useCallback(
     async (path, opts = {}) => {
-      const res = await fetch(path, {
+      const res = await fetch(`${API_BASE}${path}`, {
         ...opts,
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(opts.headers || {}) },
       });
@@ -194,7 +195,7 @@ export default function App() {
     } catch (e) {
       setError(e.message === 'auth'
         ? 'The token was rejected. Paste a valid admin token to continue.'
-        : 'Cannot reach the API. Start the server (npm start in /server) and check it is on port 3000.');
+        : 'Cannot reach the API. Check that the backend server is running and VITE_API_URL is configured.');
       if (e.message === 'auth') setToken(null);
     }
   }, [call, setToken]);
