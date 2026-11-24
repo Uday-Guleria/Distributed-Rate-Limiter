@@ -1,6 +1,6 @@
 import express from 'express';
 import { createRateLimiter } from './limiter/rateLimiter.js';
-import { deriveIdentitySecret, apiKeyIdentity } from './limiter/identity.js';
+import { deriveIdentitySecret, apiKeyIdentity, getClientIp } from './limiter/identity.js';
 import { createAuth } from './auth/auth.js';
 import { corsMiddleware } from './cors.js';
 import { adminRoutes } from './routes/admin.js';
@@ -16,6 +16,7 @@ export function createApp(deps) {
   const { redis, configCache, repo, publisher, metrics, denialQueue, jwtSecret, env = 'development', commandTimeoutMs } = deps;
   const identitySecret = deps.identitySecret || deriveIdentitySecret(jwtSecret);
   const trustProxy = deps.trustProxy ?? false;
+  const clientIpHeader = deps.clientIpHeader || null;
   const app = express();
   app.disable('x-powered-by');
   app.use(corsMiddleware(deps.corsOrigins));
@@ -40,6 +41,7 @@ export function createApp(deps) {
     redis,
     configCache,
     identitySecret,
+    clientIpHeader,
     commandTimeoutMs,
     onDecision: (d) => {
       metrics?.record(d);
@@ -87,6 +89,26 @@ export function createApp(deps) {
     (_req, res) => res.json({ ok: true }));
 
   // ---- Operations ----
+  // Shows what this server actually receives for the caller, so TRUST_PROXY / CLIENT_IP_HEADER can be
+  // set from real data. Admin only: it echoes request headers.
+  app.get('/admin/whoami', auth.requireAdmin, (req, res) => {
+    const h = (name) => req.get(name) || null;
+    res.json({
+      ip: req.ip,
+      ips: req.ips,
+      socketAddress: req.socket.remoteAddress,
+      trustProxy,
+      clientIpHeader,
+      limiterWouldUse: getClientIp(req, clientIpHeader),
+      headers: {
+        'x-forwarded-for': h('x-forwarded-for'),
+        'cf-connecting-ip': h('cf-connecting-ip'),
+        'true-client-ip': h('true-client-ip'),
+        'x-real-ip': h('x-real-ip'),
+      },
+    });
+  });
+
   if (repo && configCache) app.use('/admin', adminRoutes({ repo, configCache, publisher, auth, registry: limit.registry }));
   if (metrics) app.use('/metrics', metricsRoutes({ metrics, auth }));
 

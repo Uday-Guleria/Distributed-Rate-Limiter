@@ -27,6 +27,13 @@ try {
 }
 console.log(`[proxy] trust proxy = ${JSON.stringify(trustProxy)}`);
 
+const clientIpHeader = (process.env.CLIENT_IP_HEADER || '').trim().toLowerCase() || null;
+if (clientIpHeader && !/^[a-z0-9-]+$/.test(clientIpHeader)) {
+  console.error(`CLIENT_IP_HEADER must be a header name such as cf-connecting-ip, got "${clientIpHeader}".`);
+  process.exit(1);
+}
+console.log(`[proxy] client IP header = ${clientIpHeader ?? '(none, using req.ip)'}`);
+
 let corsOrigins;
 try {
   corsOrigins = parseCorsOrigins(process.env.CORS_ORIGIN);
@@ -62,7 +69,7 @@ const metrics = new Metrics(redis);
 const denialQueue = createDenialQueue({ redisUrl });
 const denialWorker = startDenialWorker({ redisUrl, sink });
 
-const app = createApp({ redis, configCache, repo, publisher, metrics, denialQueue, jwtSecret, env, trustProxy, corsOrigins, commandTimeoutMs, identitySecret: process.env.IDENTITY_SECRET || undefined });
+const app = createApp({ redis, configCache, repo, publisher, metrics, denialQueue, jwtSecret, env, trustProxy, clientIpHeader, corsOrigins, commandTimeoutMs, identitySecret: process.env.IDENTITY_SECRET || undefined });
 const server = app.listen(port, () => console.log(`rate limiter API listening on :${port}`));
 
 async function shutdown() {

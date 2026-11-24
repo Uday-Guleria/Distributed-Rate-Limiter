@@ -26,7 +26,7 @@ const withTimeout = (promise, ms) =>
  *                   false: reject with 503 instead
  * }
  */
-export function createRateLimiter({ redis, configCache, onDecision, identitySecret, commandTimeoutMs = 250, logger = console }) {
+export function createRateLimiter({ redis, configCache, onDecision, identitySecret, clientIpHeader, commandTimeoutMs = 250, logger = console }) {
   const registry = new Map();
   const warned = new Set();
 
@@ -54,7 +54,7 @@ export function createRateLimiter({ redis, configCache, onDecision, identitySecr
         cfg = mergeConfig(options, null);
       }
 
-      const identity = resolveIdentity(req, cfg.keyBy, identitySecret);
+      const identity = resolveIdentity(req, cfg.keyBy, identitySecret, clientIpHeader);
       const base = { route: cfg.name, identity, algorithm: cfg.algorithm, at: Date.now() };
 
       let result;

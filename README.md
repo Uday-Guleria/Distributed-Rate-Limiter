@@ -138,6 +138,8 @@ JWT_SECRET=your-secret npm run admin-token
 
 On PowerShell, use `$env:JWT_SECRET="your-secret"; npm run admin-token`. Tokens last 8 hours by default.
 
+Limits by IP address only work if the server sees the real client address. Render sends traffic through Cloudflare and its own load balancers, so `req.ip` can be a proxy address that changes from request to request, and then every request looks like a new client. Limits by API key or by user don't have this problem. `GET /admin/whoami` (admin token required) shows what the server receives: the socket address, the forwarding headers and the address the limiter would use. If the real client address turns up in a header such as `cf-connecting-ip`, set `CLIENT_IP_HEADER` to that header's name. Only do this when every request really arrives through the proxy that sets the header, because otherwise a client could send the header itself and choose its own address.
+
 A few things I ran into or expect to:
 
 - Free Render web services go to sleep when idle, so the first request after a break can take a while.
@@ -146,7 +148,7 @@ A few things I ran into or expect to:
 
 ## Tests
 
-`npm test` in `server` runs 54 tests against a real Redis and a real MongoDB, with no mocks for either. They need Redis on `localhost:6379` and MongoDB on `localhost:27017`, or set `REDIS_URL` and `MONGO_TEST_URI`. The MongoDB tests use a throwaway database and are skipped, with a message, if no MongoDB is reachable.
+`npm test` in `server` runs 60 tests against a real Redis and a real MongoDB, with no mocks for either. They need Redis on `localhost:6379` and MongoDB on `localhost:27017`, or set `REDIS_URL` and `MONGO_TEST_URI`. The MongoDB tests use a throwaway database and are skipped, with a message, if no MongoDB is reachable.
 
 They cover:
 
