@@ -70,4 +70,3 @@ button.link { background: none; color: var(--ink); padding: 0; text-decoration: 
   .readouts { gap: 24px; }
 }
 @media (prefers-reduced-motion: reduce) { .lamp { transition: none; } }
-th:nth-child(3), td:nth-child(3) { padding-left: 20px; }

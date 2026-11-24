@@ -2,14 +2,15 @@ import express from 'express';
 import { createRateLimiter } from './limiter/rateLimiter.js';
 import { deriveIdentitySecret, apiKeyIdentity } from './limiter/identity.js';
 import { createAuth } from './auth/auth.js';
+import { corsMiddleware } from './cors.js';
 import { adminRoutes } from './routes/admin.js';
 import { metricsRoutes } from './routes/metrics.js';
 
 /**
-- Builds the Express app from injected dependencies, so tests and the real server
-- share the same wiring.
+ * Builds the Express app from injected dependencies, so tests and the real server
+ * share the same wiring.
  *
-- deps: { redis, configCache, repo, publisher, metrics, denialQueue, jwtSecret, env, commandTimeoutMs }
+ * deps: { redis, configCache, repo, publisher, metrics, denialQueue, jwtSecret, env, commandTimeoutMs, corsOrigins }
  */
 export function createApp(deps) {
   const { redis, configCache, repo, publisher, metrics, denialQueue, jwtSecret, env = 'development', commandTimeoutMs } = deps;
@@ -17,18 +18,8 @@ export function createApp(deps) {
   const trustProxy = deps.trustProxy ?? false;
   const app = express();
   app.disable('x-powered-by');
+  app.use(corsMiddleware(deps.corsOrigins));
   app.set('trust proxy', trustProxy);
-
-  // Allow cross-origin requests from your Render Static Site dashboard
-  const allowedOrigin = (deps.corsOrigin || process.env.CORS_ORIGIN || '*').replace(/\/$/, '');
-  app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key');
-    if (req.method === 'OPTIONS') return res.sendStatus(204);
-    next();
-  });
-
   app.use(express.json());
 
   // Misconfiguration hint: a proxy is probably in front of us but we are not told to trust it,
@@ -56,6 +47,7 @@ export function createApp(deps) {
     },
   });
 
+  app.get('/', (_req, res) => res.json({ service: 'distributed-rate-limiter', status: 'ok', health: '/health' }));
   app.get('/health', (_req, res) => res.json({ ok: true }));
 
   // Dev-only token issuance so the demo and dashboard work without a login system.

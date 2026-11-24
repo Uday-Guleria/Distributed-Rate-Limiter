@@ -6,6 +6,7 @@ import { createDenialQueue, startDenialWorker, mongoSink } from './queue/denialQ
 import { Metrics } from './metrics.js';
 import { createApp } from './app.js';
 import { parseTrustProxy } from './config/trustProxy.js';
+import { parseCorsOrigins } from './cors.js';
 
 const port = Number(process.env.PORT || 3000);
 const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
@@ -25,6 +26,19 @@ try {
   process.exit(1);
 }
 console.log(`[proxy] trust proxy = ${JSON.stringify(trustProxy)}`);
+
+let corsOrigins;
+try {
+  corsOrigins = parseCorsOrigins(process.env.CORS_ORIGIN);
+} catch (err) {
+  console.error(err.message);
+  process.exit(1);
+}
+console.log(`[cors] allowed origins = ${corsOrigins.length ? corsOrigins.join(', ') : '(none, same-origin only)'}`);
+
+// If Redis is far away (different region, or a hosted service like Upstash), 250 ms can be too tight
+// and every check would time out and fall back to fail-open / fail-closed.
+const commandTimeoutMs = Number(process.env.LIMITER_TIMEOUT_MS) || 250;
 
 const redis = createRedis(redisUrl);
 const subscriber = createRedis(redisUrl, { enableOfflineQueue: true, maxRetriesPerRequest: null });
@@ -48,7 +62,7 @@ const metrics = new Metrics(redis);
 const denialQueue = createDenialQueue({ redisUrl });
 const denialWorker = startDenialWorker({ redisUrl, sink });
 
-const app = createApp({ redis, configCache, repo, publisher, metrics, denialQueue, jwtSecret, env, trustProxy, identitySecret: process.env.IDENTITY_SECRET || undefined });
+const app = createApp({ redis, configCache, repo, publisher, metrics, denialQueue, jwtSecret, env, trustProxy, corsOrigins, commandTimeoutMs, identitySecret: process.env.IDENTITY_SECRET || undefined });
 const server = app.listen(port, () => console.log(`rate limiter API listening on :${port}`));
 
 async function shutdown() {

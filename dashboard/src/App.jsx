@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+// Empty in development (Vite proxies to the local API). When the dashboard is hosted separately from
+// the API, set VITE_API_URL at build time to the API's address, e.g. https://my-api.onrender.com
+const API = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 const POLL_MS = 3000;
 const ROUTES = ['public', 'search', 'spike', 'login', 'account'];
 const WARN = 0.05; // amber above 5% denied
@@ -22,7 +24,7 @@ function useApi() {
 
   useEffect(() => {
     // In development the API can mint an admin token. In production this 404s and you paste one in.
-    fetch(`${API_BASE}/dev/token?sub=dashboard&role=admin`)
+    fetch(`${API}/dev/token?sub=dashboard&role=admin`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((d) => setToken(d.token))
       .catch(() => setNeedsToken(true));
@@ -30,7 +32,7 @@ function useApi() {
 
   const call = useCallback(
     async (path, opts = {}) => {
-      const res = await fetch(`${API_BASE}${path}`, {
+      const res = await fetch(`${API}${path}`, {
         ...opts,
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(opts.headers || {}) },
       });
@@ -78,8 +80,8 @@ function Chart({ series }) {
         <line x1="0" x2={W} y1={H} y2={H} className="axis" />
         {series.map((s, i) => {
           const x = pad + i * bw;
-          const hA = (s.allowed / max) * (H - 24);
-          const hD = (s.denied / max) * (H - 24);
+          const hA = (s.allowed / max) * (H - 8);
+          const hD = (s.denied / max) * (H - 8);
           return (
             <g key={s.minute}>
               <rect x={x + 1.5} y={H - hA} width={Math.max(bw - 3, 1)} height={hA} className="bar-ok" />
@@ -99,7 +101,7 @@ function Chart({ series }) {
 function Throttled({ top }) {
   return (
     <section>
-      <h2>Most throttled clients (cumulative)</h2>
+      <h2>Most throttled clients</h2>
       {top.length === 0 ? (
         <p className="empty">Nobody has been denied yet. Clients that hit a limit will appear here.</p>
       ) : (
@@ -195,7 +197,7 @@ export default function App() {
     } catch (e) {
       setError(e.message === 'auth'
         ? 'The token was rejected. Paste a valid admin token to continue.'
-        : 'Cannot reach the API. Check that the backend server is running and VITE_API_URL is configured.');
+        : `Cannot reach the API${API ? ` at ${API}` : ''}. Check that the server is running and, if the dashboard is hosted separately, that VITE_API_URL and the server's CORS_ORIGIN are set.`);
       if (e.message === 'auth') setToken(null);
     }
   }, [call, setToken]);

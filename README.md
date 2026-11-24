@@ -1,6 +1,6 @@
 # Distributed Rate Limiter
 
-![Dashboard showing live allowed and denied traffic](docs/Dashboard.png)
+![Dashboard showing live allowed and denied traffic](docs/dashboard.png)
 
 A rate limiter for Express that keeps its counters in Redis, so any number of app instances share the same limits. I built it to understand what goes wrong when several servers count requests at the same time, and how to handle Redis going down. It has three algorithms, limits you can change while the server is running, a record of who got blocked, and a small React dashboard.
 
@@ -114,9 +114,39 @@ for i in $(seq 1 12); do curl -s -o /dev/null -w "%{http_code} " -H "x-api-key: 
 
 Other scripts in `server`: `npm run demo:load` sends a mix of well-behaved and abusive traffic so the dashboard has something to show (it prints which hash belongs to which client), `npm run demo:boundary` runs the comparison above, and `npm run bench` measures latency.
 
+## Deploying to Render
+
+I run the API as a Render web service and the dashboard as a static site. They end up at different addresses, which matters in two places: the dashboard has to know where the API is, and the API has to allow requests from the dashboard's address.
+
+For the API, create a web service with root directory `server`, build command `npm install` and start command `npm start`. Set these environment variables:
+
+- `NODE_ENV=production`
+- `REDIS_URL`, the connection string from your Redis provider. Upstash gives a `rediss://` URL, and the double s means TLS, so keep it.
+- `MONGO_URI`, the Atlas connection string. In Atlas, under Network Access, allow Render's addresses (`0.0.0.0/0` is the easy option on a free cluster).
+- `JWT_SECRET`, a long random string. The server refuses to start in production with the default one.
+- `CORS_ORIGIN`, the exact address of the dashboard, for example `https://my-dashboard.onrender.com`. No wildcard, no path.
+- `TRUST_PROXY=1`, because Render puts a proxy in front of the app and I want the real client IP, not the proxy's.
+
+For the dashboard, create a static site with root directory `dashboard`, build command `npm install && npm run build` and publish directory `dist`. Set `VITE_API_URL` to the API's address with no trailing slash. Vite reads it while building, so if you change it, redeploy with the build cache cleared.
+
+Visiting the API's root address shows a small JSON status, and `/health` returns `{"ok":true}`. The dashboard needs an admin token, and the `/dev/token` shortcut is switched off in production. Make one on your own machine with the same `JWT_SECRET` the server uses and paste it into the dashboard's sign-in box:
+
+```bash
+cd server
+JWT_SECRET=your-secret npm run admin-token
+```
+
+On PowerShell, use `$env:JWT_SECRET="your-secret"; npm run admin-token`. Tokens last 8 hours by default.
+
+A few things I ran into or expect to:
+
+- Free Render web services go to sleep when idle, so the first request after a break can take a while.
+- If Redis is in a different region from the API, each check takes longer and the 250 ms limit can be too tight. The symptom is the "Let through while Redis was down" number climbing on the dashboard. Raise `LIMITER_TIMEOUT_MS`, or move Redis closer.
+- The dashboard polling and the BullMQ worker make a steady stream of Redis calls, so keep an eye on the command limit of a free Redis plan.
+
 ## Tests
 
-`npm test` in `server` runs 48 tests against a real Redis and a real MongoDB, with no mocks for either. They need Redis on `localhost:6379` and MongoDB on `localhost:27017`, or set `REDIS_URL` and `MONGO_TEST_URI`. The MongoDB tests use a throwaway database and are skipped, with a message, if no MongoDB is reachable.
+`npm test` in `server` runs 54 tests against a real Redis and a real MongoDB, with no mocks for either. They need Redis on `localhost:6379` and MongoDB on `localhost:27017`, or set `REDIS_URL` and `MONGO_TEST_URI`. The MongoDB tests use a throwaway database and are skipped, with a message, if no MongoDB is reachable.
 
 They cover:
 

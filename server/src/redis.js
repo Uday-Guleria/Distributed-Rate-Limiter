@@ -8,7 +8,8 @@ export function createRedis(url, overrides = {}) {
   const client = new Redis(url, {
     enableOfflineQueue: false,
     maxRetriesPerRequest: 1,
-    connectTimeout: 1000,
+    // Only affects the initial connection (TLS to a hosted Redis can take longer than 1 s), not command latency.
+    connectTimeout: Number(process.env.REDIS_CONNECT_TIMEOUT_MS) || 5000,
     retryStrategy: (times) => Math.min(times * 100, 1000),
     lazyConnect: false,
     ...overrides,
